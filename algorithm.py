@@ -203,12 +203,10 @@ class PUCrossEntropyLoss(nn.Module):
         #TODO: jperla: needs to be inserted
 
     def forward(self, output, target):
-        print('b:', self.b)
-        print('c:', torch.sigmoid(torch.tensor(self.b)))
         # take binary classifier
         o = output.clone()
         # expand it to 3 classes using b
-        o2 = torch.stack((o[:,0] + self.b, o[:,0], o[:,1]), dim=1)
+        o2 = torch.stack((o[:,0], o[:,0] - self.b, o[:,1]), dim=1)
         # normalize
         softmax = nn.Softmax(dim=1)
         PlPuNu = softmax(o2)
@@ -221,7 +219,6 @@ class PUCrossEntropyLoss(nn.Module):
 
         criterion = nn.NLLLoss(reduction='mean')
         loss = criterion(o, target)
-        print('loss:', loss.detach().cpu().numpy())
 
         return loss
 
@@ -258,6 +255,7 @@ def train_POELR(epoch, net,  p_trainloader, u_trainloader, optimizer, criterion,
         u_loss = criterion(u_outputs, u_targets)
 
         loss = (p_loss + u_loss)/2.0
+        #print('loss:', loss.detach().cpu().numpy())
 
         loss.backward()
 

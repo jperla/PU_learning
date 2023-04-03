@@ -86,6 +86,9 @@ timestr = time.strftime("%Y%m%d-%H%M%S")
 
 file_name = log_dir + "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(train_method, net_type, args.seed, epochs, warm_start_epochs, args.lr, args.wd, alpha, beta)   + "_" + timestr
 
+print('file_name:')
+print(file_name)
+print('\n\n')
 outfile= open(file_name, 'w')
 
 ## Obtain dataset 
@@ -213,6 +216,9 @@ elif train_method=='POELR':
         duration_s = stop - start
 
         if estimate_alpha: 
+            print('b:', criterion.b)
+            print('c:', torch.sigmoid(torch.tensor(criterion.b)))
+
             num_p, num_u = len(p_trainloader), len(u_trainloader)
             n = num_p + num_u
             est_p = int(n * torch.sigmoid(criterion.b).detach().cpu().numpy())
@@ -235,7 +241,7 @@ elif train_method=='POELR':
 
             alpha_estimate =our_mpe_estimate
 
-            outfile.write("{}, {:.3}, {:.3}, {:.3}, {:.3%}, {:.3%}, {:.3%}, {:.3%}, {:.3%}, {:.3}\n".format(epoch, train_acc, valid_acc, dedpul_accuracy,\
+            outfile.write("{}, {:.3}, {:.3}, {:.3}, {:.3%}, {:.3%}, {:.3%}, {:.3%}, {:.3%}, {:.6}\n".format(epoch, train_acc, valid_acc, dedpul_accuracy,\
                  alpha_estimate, dedpul_estimate, EN_estimate, scott_mpe_estimator, poelr_estimate, duration_s) )
             outfile.flush()
 
@@ -280,7 +286,7 @@ elif train_method=='CVIR' or train_method=="TEDn":
 
             alpha_estimate =our_mpe_estimate
 
-            outfile.write("{}, {:.3}, {:.3}, {:.3}, {:.3%}, {:.3%}, {:.3%}, {:.3%}, {:.3}\n".format(epoch, train_acc, valid_acc, dedpul_accuracy,\
+            outfile.write("{}, {:.3}, {:.3}, {:.3}, {:.3%}, {:.3%}, {:.3%}, {:.3%}, {:.6}\n".format(epoch, train_acc, valid_acc, dedpul_accuracy,\
                  alpha_estimate, dedpul_estimate, EN_estimate, scott_mpe_estimator, duration_s) )
             outfile.flush()
 
