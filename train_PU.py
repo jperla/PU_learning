@@ -54,6 +54,7 @@ print(args)
 
 net_type = args.net_type
 device = 'cuda' if torch.cuda.is_available() else ('mps' if torch.has_mps else 'cpu')
+#device = 'cpu'
 train_method = args.train_method
 data_type = args.data_type
 ## Train set for positive and unlabeled
@@ -109,10 +110,13 @@ if device.startswith('mps'):
     net = torch.nn.DataParallel(net)
     torch.backends.mps.benchmark = True
 
-criterion = nn.CrossEntropyLoss()
+if train_method == 'POELR':
+    criterion = PUCrossEntropyLoss(b=0.0)
+else:
+    criterion = nn.CrossEntropyLoss()
 
 if optimizer_str=="SGD":
-    optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.wd)
+    optimizer = optim.SGD(list(net.parameters()) + list(criterion.parameters()), lr=args.lr, momentum=args.momentum, weight_decay=args.wd)
 elif optimizer_str=="Adam":
     optimizer = optim.Adam(net.parameters(), lr=args.lr,weight_decay=args.wd)
 elif optimizer_str=="AdamW": 
@@ -195,6 +199,50 @@ if train_method=='PvU':
             outfile.write("{}, {}, {}\n".format(epoch, train_acc, valid_acc))
             outfile.flush()
 
+elif train_method=='POELR': 
+
+    for epoch in range(epochs):
+        
+        start = time.time()
+        train_acc = train_POELR(epoch, net,  p_trainloader, u_trainloader,\
+            optimizer, criterion, device, show_bar=show_bar)
+
+        valid_acc = validate(epoch, net, u_validloader, \
+            criterion=criterion, device=device, threshold=0.5, show_bar=show_bar)
+        stop = time.time()
+        duration_s = stop - start
+
+        if estimate_alpha: 
+            num_p, num_u = len(p_trainloader), len(u_trainloader)
+            n = num_p + num_u
+            est_p = int(n * torch.sigmoid(criterion.b).detach().cpu().numpy())
+            extra_p = est_p - num_p
+            poelr_estimate = float(extra_p) / float(num_u)
+            
+
+            pos_probs = p_probs(net, device, p_validloader)
+            unlabeled_probs, unlabeled_targets = u_probs(net, device, u_validloader)
+
+            scott_mpe_estimator = scott_estimator(pos_probs, unlabeled_probs)
+
+            our_mpe_estimate, _, _ = BBE_estimator(pos_probs, unlabeled_probs, unlabeled_targets)
+
+            dedpul_estimate, dedpul_probs = dedpul(pos_probs, unlabeled_probs,unlabeled_targets)
+
+            EN_estimate= estimator_CM_EN(pos_probs, unlabeled_probs[:,0])
+
+            dedpul_accuracy = dedpul_acc(dedpul_probs,unlabeled_targets )*100.0
+
+            alpha_estimate =our_mpe_estimate
+
+            outfile.write("{}, {:.3}, {:.3}, {:.3}, {:.3%}, {:.3%}, {:.3%}, {:.3%}, {:.3%}, {:.3}\n".format(epoch, train_acc, valid_acc, dedpul_accuracy,\
+                 alpha_estimate, dedpul_estimate, EN_estimate, scott_mpe_estimator, poelr_estimate, duration_s) )
+            outfile.flush()
+
+        else: 
+            outfile.write("{}, {}, {}\n".format(epoch, train_acc, valid_acc))
+            outfile.flush()
+
 elif train_method=='CVIR' or train_method=="TEDn": 
 
     alpha_used = alpha_estimate
@@ -206,6 +254,7 @@ elif train_method=='CVIR' or train_method=="TEDn":
         else:
             alpha_used = alpha
         
+        start = time.time()
         keep_samples, neg_reject = rank_inputs(epoch, net, u_trainloader, device,\
              alpha_used, u_size=train_unlabeled_size)
         
@@ -214,6 +263,8 @@ elif train_method=='CVIR' or train_method=="TEDn":
 
         valid_acc = validate(epoch, net, u_validloader, \
             criterion=criterion, device=device, threshold=0.5,show_bar=show_bar)
+        stop = time.time()
+        duration_s = stop - start
             
         if estimate_alpha: 
             pos_probs = p_probs(net, device, p_validloader)
@@ -229,8 +280,8 @@ elif train_method=='CVIR' or train_method=="TEDn":
 
             alpha_estimate =our_mpe_estimate
 
-            outfile.write("{}, {}, {}, {}, {}, {}, {}, {}\n".format(epoch, train_acc, valid_acc, dedpul_accuracy,\
-                 alpha_estimate, dedpul_estimate, EN_estimate, scott_mpe_estimator) )
+            outfile.write("{}, {:.3}, {:.3}, {:.3}, {:.3%}, {:.3%}, {:.3%}, {:.3%}, {:.3}\n".format(epoch, train_acc, valid_acc, dedpul_accuracy,\
+                 alpha_estimate, dedpul_estimate, EN_estimate, scott_mpe_estimator, duration_s) )
             outfile.flush()
 
         else: 

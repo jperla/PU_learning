@@ -1,4 +1,6 @@
 import torch
+import torch.nn as nn
+
 from utils import progress_bar
 import numpy as np
 
@@ -190,6 +192,88 @@ def validate_transformed(epoch, net, u_validloader, criterion, device, alpha, be
             if show_bar: 
                 progress_bar(batch_idx, len(u_validloader) , 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                     % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
+
+    return 100.*correct/total
+
+class PUCrossEntropyLoss(nn.Module):
+    def __init__(self, b=0.0):
+        super(PUCrossEntropyLoss, self).__init__()
+        #self.b = 0 #1.61 #torch.nn.Parameter(torch.tensor(b))
+        self.b = torch.nn.Parameter(torch.tensor(b))
+        #TODO: jperla: needs to be inserted
+
+    def forward(self, output, target):
+        print('b:', self.b)
+        print('c:', torch.sigmoid(torch.tensor(self.b)))
+        # take binary classifier
+        o = output.clone()
+        # expand it to 3 classes using b
+        o2 = torch.stack((o[:,0] + self.b, o[:,0], o[:,1]), dim=1)
+        # normalize
+        softmax = nn.Softmax(dim=1)
+        PlPuNu = softmax(o2)
+        self.PlPuNu = PlPuNu
+
+        # recompress to binary classification, then do log likelihood
+        o[:,0] = PlPuNu[:,0]
+        o[:,1] = PlPuNu[:,1] + PlPuNu[:,2]
+        o = torch.log(o)
+
+        criterion = nn.NLLLoss(reduction='mean')
+        loss = criterion(o, target)
+        print('loss:', loss.detach().cpu().numpy())
+
+        return loss
+
+
+def train_POELR(epoch, net,  p_trainloader, u_trainloader, optimizer, criterion, device, show_bar=True):
+    
+    if show_bar:
+        print('\nTrain Epoch: %d' % epoch)
+    net.train()
+    train_loss = 0
+    correct = 0
+    total = 0
+
+    for batch_idx, ( p_data, u_data ) in enumerate(zip(p_trainloader, u_trainloader)):
+        
+        optimizer.zero_grad()
+        
+        _, p_inputs, p_targets = p_data
+        _, u_inputs, u_targets, u_true_targets = u_data
+
+        p_targets = p_targets.to(device)
+        u_targets = u_targets.to(device)
+        
+        inputs =  torch.cat((p_inputs, u_inputs), dim=0)
+        targets =  torch.cat((p_targets, u_targets), dim=0)
+        inputs = inputs.to(device)
+
+        outputs = net(inputs)
+
+        p_outputs = outputs[:len(p_targets)]
+        u_outputs = outputs[len(p_targets):]
+        
+        p_loss = criterion(p_outputs, p_targets)
+        u_loss = criterion(u_outputs, u_targets)
+
+        loss = (p_loss + u_loss)/2.0
+
+        loss.backward()
+
+        optimizer.step()
+
+        train_loss += loss.item()
+
+        _, predicted = outputs.max(1)
+        total += targets.size(0)
+        
+        correct_preds = predicted.eq(targets).cpu().numpy()
+        correct += np.sum(correct_preds)
+
+        if show_bar:
+            progress_bar(batch_idx, len(p_trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
     return 100.*correct/total
 
