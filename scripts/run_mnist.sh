@@ -6,7 +6,7 @@ counter=0
 SEED=( 42 1432 8378 ) 
 LR=( 0.1 )
 DATATYPE=( 'mnist_binarized' 'mnist_17' )
-TRAINMETHOD=( 'TEDn' 'CVIR' 'nnPU' 'uPU' 'PvU' )
+TRAINMETHOD=( 'POELR' ) #( 'TEDn' 'CVIR' 'nnPU' 'uPU' 'PvU' )
 NETTYPE=( 'FCN' )
 ALPHA=( 0.5 )
 
